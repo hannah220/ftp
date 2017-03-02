@@ -73,12 +73,7 @@ void put(int num, char *com[])
     struct ftp_header *send_header;
     uint8_t *send_pay;
     uint8_t *data;
-
-	char pkt_data_sub1[sizeof(struct ftp_header) + DATASIZE];
-	struct ftp_header *send_header_sub1 = (struct ftp_header *)pkt_data_sub1;
-	char *data_sub1 = pkt_data_sub1 + sizeof(struct ftp_header);
-	char *p_sub1;
-	int n_sub1, len_sub1;
+    int wtime = 0;
 
 	if ((fp = fopen(com[1], "r")) == NULL) {
 		perror("fopen");
@@ -93,8 +88,8 @@ void put(int num, char *com[])
            data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
            send_header = (struct ftp_header *)data;
            send_pay = data + sizeof(struct ftp_header);
-           //memcpy(send_pay, buf, n);
-           strncpy(send_pay, buf, n);
+           memcpy(send_pay, buf, n);
+           //strncpy(send_pay, buf, n);
            /* send file content */
            send_header->type = 0x20;
            send_header->code = 0x00;
@@ -105,17 +100,19 @@ void put(int num, char *com[])
            }
            free(data);
         } else {          /// filesize if over BUFSIZE
-            while (!feof(fp)) {
+            while (1) {
+                printf("inside while(1) %d", wtime);
                 data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
                 send_header = (struct ftp_header *)data;
                 send_pay = data + sizeof(struct ftp_header);
-                //memcpy(send_pay, buf, n);
-                strncpy(send_pay, buf, n);
+                memcpy(send_pay, buf, n);
+                //strncpy(send_pay, buf, n);
                 /* send file content */
                 send_header->type = 0x20;
                 send_header->code = 0x01;
-                send_header->length = htons(len);
-                if (send(sd, data, sizeof(struct ftp_header) + len, 0) < 0) {
+                send_header->length = htons(n);
+                printf("going to send %d bytes\n", n);
+                if (send(sd, data, sizeof(struct ftp_header) + n, 0) < 0) {
                     perror("send");
                     exit(EXIT_FAILURE);
                 }
@@ -123,27 +120,26 @@ void put(int num, char *com[])
                 
                 memset(buf, 0, BUFSIZE);
                 n = fread(buf, sizeof(char), BUFSIZE, fp);
-                printf("read %d bytes\n", n);
                 len += n;
-                printf("len = %d\n", len);
-                if (n <= BUFSIZE) {
+                if (n < BUFSIZE) {
                     flag++;
                     break;
                 }
+                wtime++;
             }
             /* send the rest of the file */
-            printf("last %d n bytes\n", n);
-            printf("last data: %s\n", buf);
+            printf("last %d bytes\n", n);
             data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
             send_header = (struct ftp_header *)data;
             send_pay = data + sizeof(struct ftp_header);
-            //memcpy(send_pay, buf, n);
-            strncpy(send_pay, buf, n);
+            memcpy(send_pay, buf, n);
+            //strncpy(send_pay, buf, n);
             /* send file content */
             send_header->type = 0x20;
             send_header->code = 0x00;
-            send_header->length = htons(len);
-            if (send(sd, data, sizeof(struct ftp_header) + len, 0) < 0) {
+            send_header->length = htons(n);
+            printf("going to send last data"); 
+            if (send(sd, data, sizeof(struct ftp_header) + n, 0) < 0) {
                 perror("send");
                 exit(EXIT_FAILURE);
             }

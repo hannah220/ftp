@@ -70,13 +70,13 @@ FILE *receive_file(int sd, FILE *fp, int data_len, uint8_t code)
   char data[DATASIZE];
   int n = 0, size = 0;
 
-  //printf("data_len = %d\n", data_len);
+  printf("receive file: data_len = %d\n", data_len);
   
   /* receive the data of file and write to the file */
   while (data_len > 0) {
     if ((n = read(sd, data, DATASIZE)) > 0) {
-      data[n] = '\0';
-      //printf("code = %d, data = %s, n = %d\n", code, data, n);
+      //data[n] = '\0';
+      printf("code = %d, n = %d\n", code, n);
 	  size = fwrite(data, sizeof(char), n, fp);
 	  //printf("size of fwrite = %d\n", size);
       if (size < n) {
@@ -88,7 +88,7 @@ FILE *receive_file(int sd, FILE *fp, int data_len, uint8_t code)
       data_len = data_len - size;
     }
   }
-  //printf("code = %d\n", code);
+  printf("code = %d\n", code);
   if (code == 0x00) {
 	  //puts("close the fp!!!!!!!!!!!!!!!!");
     fclose(fp);
@@ -368,6 +368,7 @@ int main(int argc, char *argv[])
   struct sockaddr_in s_addr;
   struct sockaddr_in c_addr;
   int pid;
+  int yes = 1;
 
   if (chdir(argv[1]) < 0) {
 	  perror("chdir");
@@ -381,8 +382,11 @@ int main(int argc, char *argv[])
   }
   /* set up master socket */
   s_addr.sin_family = AF_INET;
-  s_addr.sin_addr.s_addr = INADDR_ANY;
+  //s_addr.sin_addr.s_addr = INADDR_ANY;
+  s_addr.sin_addr.s_addr = inet_addr(argv[2]);
   s_addr.sin_port = htons(PORT);
+
+  setsockopt(master_sock, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(yes));
   /* bind master socket to localhost */
   if (bind(master_sock, (struct sockaddr *)&s_addr, sizeof(s_addr)) < 0) {
     perror("bind");
