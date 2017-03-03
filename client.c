@@ -31,6 +31,8 @@ void put(int argc, char *argv[]);
 void send_filepath(int num, char *com[]);
 
 int sd;
+FILE *fp;
+int file_close = 1;
 
 struct command_table {
 	char *cmd;
@@ -146,78 +148,6 @@ void put(int num, char *com[])
             free(data);
         }
 	}
-    //free(data);
-/*
-	printf("len = %d\n", len);
-
-		data[DATASIZE - 1] = '\0';
-		printf("file contents = %s, length = %d in flag == 1\n", data, len);
-		send_header->type = 0x20;
-		send_header->code = 0x01;
-		send_header->length = htons(DATASIZE);
-		if (send(sd, pkt_data, sizeof(struct ftp_header) + len, 0) < 0) {
-			perror("send");
-			exit(EXIT_FAILURE);
-		}
-
-		while (flag == 1) {
-			char pkt_data_sub[sizeof(struct ftp_header) + DATASIZE];
-			struct ftp_header *send_header_sub = (struct ftp_header *)pkt_data_sub;
-			char *data_sub = pkt_data_sub + sizeof(struct ftp_header);
-			char *p_sub;
-			int n_sub, len_sub;
-			
-			n_sub = fread(data_sub, sizeof(char), BUFSIZE, fp);
-			len_sub = n_sub;
-			p_sub= data_sub;
-			while (!feof(fp)) {
-				for (i = 0; i < n_sub; i++) {
-					p_sub++;
-				}
-				n = fread(p_sub, sizeof(char), BUFSIZE, fp);
-				//printf("read %d bytes\n", n_sub);
-				len_sub += n_sub;
-				if (len_sub >= DATASIZE) {
-					break;
-				} else {
-					flag = 0;
-				}
-			}
-			data_sub[len_sub] = '\0';
-			printf("file contents = %s, length = %d\n", data_sub, len_sub);
-			send_header_sub->type = 0x20;
-			
-				send_header_sub->code = 0x01;
-		
-			send_header_sub->length = htons((uint16_t)len_sub);
-			if (send(sd, pkt_data_sub, sizeof(struct ftp_header) + len_sub, 0) < 0) {
-				perror("send");
-				exit(EXIT_FAILURE);
-			}
-		}
-
-		 send the rest, last message!!!!!!!!!! 
-		n_sub1 = fread(data_sub1, sizeof(char), BUFSIZE, fp);
-		len_sub1 = n_sub1;
-		p_sub1 = data_sub1;
-		while (!feof(fp)) {
-			for (i = 0; i < n_sub1; i++) {
-				p_sub1++;
-			}
-			n = fread(p_sub1, sizeof(char), BUFSIZE, fp);
-			//printf("read %d bytes\n", n_sub1);
-			len_sub1 += n_sub1;
-		}
-		data_sub1[len_sub1] = '\0';
-		printf("file contents = %s, length = %d\n", data_sub1, len_sub1);
-		send_header_sub1->type = 0x20;
-		send_header_sub1->code = 0x00;
-		send_header_sub1->length = htons((uint16_t)len_sub1);
-		if (send(sd, pkt_data_sub1, sizeof(struct ftp_header) + len_sub1, 0) < 0) {
-			perror("send");
-			exit(EXIT_FAILURE);
-		}
-	}*/
 }
 
 
@@ -268,14 +198,13 @@ void get(int num, char *com[])
 	struct ftp_header recv_header;
 	struct ftp_header recv_header_length;
 	char file_data[DATASIZE];
-	FILE *fp;
 	uint8_t code;
 
-	puts("get called");
 	len = strlen(com[1]);
 	strcpy(data, com[1]);
 	//printf("file path = %s, length = %d\n", data, len);
 
+    // send file path to the server
 	send_header->type = 0x05;
 	send_header->code = 0x00;
 	send_header->length = htons(len);
@@ -296,27 +225,67 @@ void get(int num, char *com[])
 	data_len = (int)ntohs(recv_header_length.length);
 	code = recv_header_length.code;
 
-	fp = fopen(data, "w");
-	/* receive the data of file and write to the file */
-	while (data_len > 0) {
-		if ((n = read(sd, file_data, DATASIZE)) > 0) {
-			file_data[n] = '\0';
-			//printf("code = %d, data = %s, n = %d\n", code, file_data, n);
-			size = fwrite(file_data, sizeof(char), n, fp);
-			//printf("size of fwrite = %d\n", size);
-			if (size < n) {
-				if (!feof(fp)) {
-					perror("fwrite");
-				}
-				break;
-			}
-			data_len = data_len - size;
-		}
-	}
-	if (code == 0x00) {
-		//puts("close the fp!!!!!!!!!!!!!!!!");
-		fclose(fp);
-	}
+    if (file_close == 1) { /// if file pointer is not open yet
+        fp = fopen(data, "w");
+        file_close = 0; /// file pointer is set
+    }
+    if (code == 0x00) {
+        while (data_len > 0) {
+            if ((n = read(sd, file_data, DATASIZE)) > 0) {
+                file_data[n] = '\0';
+                size = fwrite(file_data, sizeof(char), n, fp);
+                if (size < n) {
+                    if (!feof(fp)) {
+                        perror("fwrite");
+                    }
+                    break;
+                }
+                data_len = data_len - size;
+            }
+        }
+        fclose(fp);
+        file_close = 1;
+    } else {
+        while (code != 0x00) {
+            // receive the first part of the file
+            while (data_len > 0) {
+                if ((n = read(sd, file_data, DATASIZE)) > 0) {
+                    file_data[n] = '\0';
+                    size = fwrite(file_data, sizeof(char), n, fp);
+                    if (size < n) {
+                        if (!feof(fp)) {
+                            perror("fwrite");
+                        }
+                        break;
+                    }
+                    data_len = data_len - size;
+                }
+            }
+            /* receive ftp_header and get data length */
+            if (recv(sd, &recv_header_length, sizeof(struct ftp_header), 0) < 0) {
+                perror("recv");
+                exit(EXIT_FAILURE);
+            }
+            data_len = (int)ntohs(recv_header_length.length);
+            code = recv_header_length.code;
+        }
+        // receive the rest of the file
+        while (data_len > 0) {
+            if ((n = read(sd, file_data, DATASIZE)) > 0) {
+                file_data[n] = '\0';
+                size = fwrite(file_data, sizeof(char), n, fp);
+                if (size < n) {
+                    if (!feof(fp)) {
+                        perror("fwrite");
+                    }
+                    break;
+                }
+                data_len = data_len - size;
+            }
+        }
+        fclose(fp);
+        file_close = 1;
+    }
 }
 
 void pwd(int num, char *com[])

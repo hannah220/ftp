@@ -78,7 +78,6 @@ FILE *receive_file(int sd, FILE *fp, int data_len, uint8_t code)
       //data[n] = '\0';
       printf("code = %d, n = %d\n", code, n);
 	  size = fwrite(data, sizeof(char), n, fp);
-	  //printf("size of fwrite = %d\n", size);
       if (size < n) {
 	if (!feof(fp)) {
 	  perror("fwrite");
@@ -90,7 +89,6 @@ FILE *receive_file(int sd, FILE *fp, int data_len, uint8_t code)
   }
   printf("code = %d\n", code);
   if (code == 0x00) {
-	  //puts("close the fp!!!!!!!!!!!!!!!!");
     fclose(fp);
     return NULL;
   } else {
@@ -106,25 +104,19 @@ void exe_retr(int sd, int data_len)
 	char info[DATASIZE];
 	int n, i, len, flag = 0, sucess = 0, size;
     char buf[BUFSIZE];
-	//char pkt_data[sizeof(struct ftp_header) + DATASIZE];
-	//struct ftp_header *send_header = (struct ftp_header *)pkt_data;
-	//char *data = pkt_data + sizeof(struct ftp_header);
 	FILE *fp;
 	char *p;
     struct ftp_header *send_header;
     uint8_t *send_pay;
     uint8_t *data;
 
-    //data = send_header + sizeof(struct ftp_header);
     memset(info, 0, DATASIZE);
 	if (recv(sd, info, data_len, 0) < 0) {
 		perror("recv");
 		exit(EXIT_FAILURE);
     }
     
-    printf("exe_retr called\n");
-	//info[n] = '\0';
-	printf("file_path = %s\n", info);
+	//printf("file_path = %s\n", info);
 	if ((fp = fopen(info, "r")) == NULL) {
 		perror("fopen");
 		send_header_first.type = 0x12;
@@ -139,41 +131,61 @@ void exe_retr(int sd, int data_len)
 		perror("send");
 		exit(EXIT_FAILURE);
 	}
-	if (sucess == 1) {
-		/* read the content of the file */
-		n = fread(buf, sizeof(char), BUFSIZE, fp);
-		len = n;
-		p = buf;
+    // read the content of the file 
+    n = fread(buf, sizeof(char), BUFSIZE, fp);
+
+    if (n < BUFSIZE) {
         data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
         send_header = (struct ftp_header *)data;
         send_pay = data + sizeof(struct ftp_header);
         memcpy(send_pay, buf, n);
-		while (!feof(fp)) {
-			for (i = 0; i < n; i++) {
-				p++;
-			}
-			n = fread(p, sizeof(char), BUFSIZE, fp);
-			//printf("read %d bytes\n", n);
-			len += n;
-			if (len >= DATASIZE) {
-				flag++;
-				break;
-			}
-		}
-	}
-	/* send file content */
-	if (flag == 0) {
-		data[len] = '\0';
-		//printf("file contents = %s, length = %d\n", data, len);
-		send_header->type = 0x20;
-		send_header->code = 0x00;
-		send_header->length = htons(len);
-		if (send(sd, data, sizeof(struct ftp_header) + len, 0) < 0) {
-			perror("send");
-			exit(EXIT_FAILURE);
-		}
-	}
-    free(data);
+        // send file content
+        send_header->type = 0x20;
+        send_header->code = 0x00;
+        send_header->length = htons(n);
+        if (send(sd, data, sizeof(struct ftp_header) + n, 0) < 0) {
+            perror("send");
+            exit(EXIT_FAILURE);
+        }
+        free(data);
+    } else {
+        while (1) {
+            data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
+            send_header = (struct ftp_header *)data;
+            send_pay = data + sizeof(struct ftp_header);
+            memcpy(send_pay, buf, n);
+            // send file content
+            send_header->type = 0x20;
+            send_header->code = 0x01;
+            send_header->length = htons(n);
+            if (send(sd, data, sizeof(struct ftp_header) + n, 0) < 0) {
+                perror("send");
+                exit(EXIT_FAILURE);
+            }
+            free(data);
+
+            memset(buf, 0, BUFSIZE);
+            n = fread(buf, sizeof(char), BUFSIZE, fp);
+            if (n < BUFSIZE) {
+                break;
+            }
+        }
+        // send the rest of the file
+        //printf("last %d bytes\n", n);
+        data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
+            send_header = (struct ftp_header *)data;
+            send_pay = data + sizeof(struct ftp_header);
+            memcpy(send_pay, buf, n);
+            // send file content
+            send_header->type = 0x20;
+            send_header->code = 0x00;
+            send_header->length = htons(n);
+            if (send(sd, data, sizeof(struct ftp_header) + n, 0) < 0) {
+                perror("send");
+                exit(EXIT_FAILURE);
+            }
+            free(data); 
+    }
 }
 
 void exe_pwd(int sd)
