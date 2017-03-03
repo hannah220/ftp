@@ -382,6 +382,11 @@ int main(int argc, char *argv[])
   int pid;
   int yes = 1;
 
+  if (argc != 3) {
+      printf("put <directory> <IPaddress>\n");
+      exit(0);
+  }
+
   if (chdir(argv[1]) < 0) {
 	  perror("chdir");
 	  exit(EXIT_FAILURE);
