@@ -13,9 +13,10 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-#define DATASIZE 1024
-//#define BUFSIZE 2000
-#define BUFSIZE 1024
+//#define DATASIZE 1024
+#define DATASIZE 1000000
+#define BUFSIZE 1000000
+//#define BUFSIZE 1024
 #define PORT 10000
 
 struct ftp_header {
@@ -87,7 +88,6 @@ FILE *receive_file(int sd, FILE *fp, int data_len, uint8_t code)
       data_len = data_len - size;
     }
   }
-  printf("code = %d\n", code);
   if (code == 0x00) {
     fclose(fp);
     return NULL;

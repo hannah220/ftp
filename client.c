@@ -12,11 +12,10 @@
 #include <sys/stat.h>
 #include <dirent.h>
 
-//#define DATASIZE 2000
-#define DATASIZE 1024
+//#define DATASIZE 1024
+#define DATASIZE 1000000
+#define BUFSIZE 1000000
 //#define BUFSIZE 1024
-//#define BUFSIZE 104857
-#define BUFSIZE 1024
 #define PORT 10000
 
 void quit();
@@ -84,14 +83,12 @@ void put(int num, char *com[])
 		/* content of the file */
 		n = fread(buf, sizeof(char), BUFSIZE, fp);
 		len = n;
-		printf("first length = %d\n", len);
 
         if (n < BUFSIZE) {   /// filesize is under BUFSIZE
            data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
            send_header = (struct ftp_header *)data;
            send_pay = data + sizeof(struct ftp_header);
            memcpy(send_pay, buf, n);
-           //strncpy(send_pay, buf, n);
            /* send file content */
            send_header->type = 0x20;
            send_header->code = 0x00;
@@ -103,17 +100,14 @@ void put(int num, char *com[])
            free(data);
         } else {          /// filesize if over BUFSIZE
             while (1) {
-                printf("inside while(1) %d", wtime);
                 data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
                 send_header = (struct ftp_header *)data;
                 send_pay = data + sizeof(struct ftp_header);
                 memcpy(send_pay, buf, n);
-                //strncpy(send_pay, buf, n);
                 /* send file content */
                 send_header->type = 0x20;
                 send_header->code = 0x01;
                 send_header->length = htons(n);
-                printf("going to send %d bytes\n", n);
                 if (send(sd, data, sizeof(struct ftp_header) + n, 0) < 0) {
                     perror("send");
                     exit(EXIT_FAILURE);
@@ -130,12 +124,10 @@ void put(int num, char *com[])
                 wtime++;
             }
             /* send the rest of the file */
-            printf("last %d bytes\n", n);
             data = (uint8_t *)malloc(sizeof(struct ftp_header) + sizeof(uint8_t) * n);
             send_header = (struct ftp_header *)data;
             send_pay = data + sizeof(struct ftp_header);
             memcpy(send_pay, buf, n);
-            //strncpy(send_pay, buf, n);
             /* send file content */
             send_header->type = 0x20;
             send_header->code = 0x00;
